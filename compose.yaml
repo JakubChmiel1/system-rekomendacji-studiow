@@ -1,0 +1,13 @@
+name: rekomendacje-studiow
+
+services:
+  app:
+    build: .
+    ports:
+      - "127.0.0.1:8501:8501"
+    volumes:
+      - ./app:/app/app:ro
+      - sqlite_data:/data
+
+volumes:
+  sqlite_data:

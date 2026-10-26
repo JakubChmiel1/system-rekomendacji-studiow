@@ -1,0 +1,1 @@
+"""System rekomendacji kierunków studiów."""
