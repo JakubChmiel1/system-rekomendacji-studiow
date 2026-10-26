@@ -17,18 +17,43 @@ Otwórz [localhost:8501](http://localhost:8501). Pierwsze budowanie wymaga inter
 
 ## Praca zespołu
 
-Kod znajduje się w `app/`. Zmiany są widoczne po zapisaniu pliku i odświeżeniu
-strony. Każdy pracuje na swojej gałęzi i wysyła zmiany przez Pull Request.
+Wszyscy pracujemy bezpośrednio na gałęzi `main`. Uzgadniamy podział zadań,
+żeby nie zmieniać jednocześnie tych samych fragmentów kodu.
 
-Po zapisaniu własnej pracy i przejściu na wspólną gałąź pobierz aktualizacje:
+Przed rozpoczęciem zadania, po wysłaniu wcześniejszych zmian, pobierz aktualny kod:
 
 ```powershell
+git switch main
 git pull --ff-only
 docker compose up --build -d --wait
 ```
 
-Ta sama gałąź i commit oznaczają ten sam etap projektu. Wersje bibliotek są
-zapisane w `requirements.txt`, a obraz Pythona jest przypięty w `Dockerfile`.
+Kod znajduje się w `app/`. Zmiany są widoczne po zapisaniu pliku i odświeżeniu strony.
+Po wykonaniu zadania zapisz zmiany i pobierz ewentualne aktualizacje od pozostałych:
+
+```powershell
+git add .
+git commit -m "Opis wykonanych zmian"
+git pull --rebase
+```
+
+Jeśli pojawią się konflikty, rozwiąż je, dodaj poprawione pliki przez `git add`
+i dokończ operację poleceniem `git rebase --continue`.
+
+Uruchom aplikację i sprawdź działanie połączonych zmian:
+
+```powershell
+docker compose up --build -d --wait
+```
+
+Następnie wyślij zmiany do wspólnego repozytorium:
+
+```powershell
+git push
+```
+
+Wysyłamy małe, działające zmiany. Wersje bibliotek są zapisane w `requirements.txt`,
+a obraz Pythona jest przypięty w `Dockerfile`.
 
 ## Baza i zatrzymanie
 
