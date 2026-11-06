@@ -13,6 +13,7 @@ RUN python -m pip install --no-cache-dir -r requirements.txt \
     && mkdir -p /data \
     && chown app:app /data
 
+COPY .streamlit/config.toml ./.streamlit/config.toml
 COPY app/ ./app/
 COPY tests/ ./tests/
 

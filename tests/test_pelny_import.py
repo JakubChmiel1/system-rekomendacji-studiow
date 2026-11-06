@@ -104,14 +104,11 @@ class TestPelnegoImportu(unittest.TestCase):
                 importuj_wszystko(kandydat)
             pobieranie.assert_not_called()
 
-    def test_import_bez_konta_zapisuje_historie_bez_administratora(self):
-        with patch("app.radon._pobierz_strone", side_effect=self.odpowiedzi()):
-            wynik = importuj_wszystko()
-        self.assertEqual(wynik["instytucje"], 1)
-        with polaczenie() as baza:
-            historia = baza.execute("SELECT id_administratora FROM historia_importow WHERE zakres = 'pelny'").fetchall()
-            self.assertEqual(len(historia), 2)
-            self.assertTrue(all(wiersz[0] is None for wiersz in historia))
+    def test_import_bez_logowania_jest_zablokowany(self):
+        with patch("app.radon._pobierz_strone") as pobieranie:
+            with self.assertRaises(PermissionError):
+                importuj_wszystko()
+            pobieranie.assert_not_called()
 
     def test_niepelne_lub_zapetlone_strony_sa_bledem(self):
         for strony in [[self.strona([self.instytucja], 2)],
@@ -149,7 +146,7 @@ class TestPelnegoImportu(unittest.TestCase):
             initialize_database()
             initialize_database()
             with polaczenie() as baza:
-                self.assertEqual(baza.execute("PRAGMA user_version").fetchone()[0], 2)
+                self.assertEqual(baza.execute("PRAGMA user_version").fetchone()[0], 3)
                 self.assertEqual(baza.execute("SELECT email FROM uzytkownicy WHERE id=1").fetchone()[0], "stary@example.test")
                 self.assertEqual(baza.execute("SELECT id_wariantu FROM ulubione WHERE id_uzytkownika=1").fetchone()[0], 1)
                 baza.execute("SELECT tresc_json FROM dane_zrodlowe_api")

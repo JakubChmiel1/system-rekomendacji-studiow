@@ -33,7 +33,7 @@ def initialize_database() -> None:
     with polaczenie() as baza:
         baza.execute("PRAGMA journal_mode = WAL")
         wersja = baza.execute("PRAGMA user_version").fetchone()[0]
-        if wersja > 2:
+        if wersja > 3:
             raise RuntimeError("Baza pochodzi z nowszej wersji aplikacji.")
         if wersja == 0:
             schemat = Path(__file__).with_name("schemat.sql").read_text(encoding="utf-8")
@@ -45,15 +45,18 @@ def initialize_database() -> None:
                 if stara_tabela:
                     baza.execute("INSERT OR IGNORE INTO metadane_aplikacji SELECT key, value FROM app_metadata")
                     baza.execute("DROP TABLE app_metadata")
-                baza.execute("PRAGMA user_version = 2")
+                baza.execute("PRAGMA user_version = 3")
             except Exception:
                 baza.rollback()
                 raise
-        elif wersja == 1:
-            migracja = Path(__file__).with_name("migracje") / "002_pelny_import.sql"
+        elif wersja < 3:
+            migracje = {2: "002_pelny_import.sql", 3: "003_profil_i_rekomendacje.sql"}
             try:
-                baza.executescript("BEGIN IMMEDIATE;\n" + migracja.read_text(encoding="utf-8"))
-                baza.execute("PRAGMA user_version = 2")
+                for numer in range(wersja + 1, 4):
+                    migracja = Path(__file__).with_name("migracje") / migracje[numer]
+                    baza.executescript("BEGIN IMMEDIATE;\n" + migracja.read_text(encoding="utf-8"))
+                    baza.execute(f"PRAGMA user_version = {numer}")
+                    baza.commit()
             except Exception:
                 baza.rollback()
                 raise

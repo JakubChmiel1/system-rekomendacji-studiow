@@ -1,6 +1,7 @@
 # System rekomendacji kierunków studiów
 
-Python, Streamlit, SQLite i lokalny model Qwen działają wspólnie w Docker Compose.
+Kierunek. — osobisty wybór studiów. Python, Streamlit, SQLite i lokalny model
+Qwen działają wspólnie w Docker Compose.
 
 ## Uruchomienie
 
@@ -22,6 +23,24 @@ docker compose up --build -d --wait
 ```
 
 Otwórz [localhost:8501](http://localhost:8501).
+
+Konto demonstracyjne administratora: login **admin**, hasło **admin**. Jest tworzone
+jednorazowo przy starcie; istniejące hasło nie jest resetowane. Rejestracja zwykłego
+kandydata wymaga poprawnego e-maila i hasła o długości 12–256 znaków.
+
+Po zalogowaniu:
+
+1. W **Mój profil** dodaj wyniki matury, poziomy przedmiotów i kwalifikacje.
+2. Wypełnij **Ankietę**. Możesz później zmienić odpowiedzi i zapisać kolejną wersję.
+3. Na **Mapie uczelni** wybierz miejscowość lub kliknij punkt zamieszkania i zapisz go.
+4. Odkryj **top 10** oraz **Katalog kierunków**. Filtruj nazwę, województwo, uczelnię,
+   miasto, obszar, tryb, język, poziom, rodzaj uczelni i dystans.
+5. Zapisuj ulubione i rozmawiaj z doradcą w prawym panelu. Preferencje z rozmowy
+   zmieniają punktację rankingu; można je cofnąć.
+
+Procent to **dopasowanie do profilu**, a nie szansa przyjęcia. Algorytm działa
+niezależnie od czatu. Przy niepełnym profilu pokazuje wstępne propozycje.
+
 
 Compose uruchamia Ollamę, przygotowuje model `qwen3.5:4b`, a następnie uruchamia
 aplikację. Zakończenie kontenera `model-init` z kodem 0 jest prawidłowe:
@@ -117,20 +136,49 @@ Docker przechowuje obrazy i wolumeny w swoim katalogu danych. Jeśli chcesz uży
 dysku D, ustaw lokalizację danych w Docker Desktop; projekt nie narzuca litery dysku.
 
 
-## Baza danych
+## Dane, ranking i doradca
 
-Baza SQLite ma nazwę `rekomendacje_studiow.db` i polskie nazwy tabel oraz kolumn.
-Przy pierwszym uruchomieniu kontenera automatycznie wczytuje 140 rzeczywistych
-kierunków z zestawu startowego RAD-on/POL-on. Dane pozostają w wolumenie Dockera.
+SQLite `rekomendacje_studiow.db` przechowuje oddzielne profile, ankiety, oceny,
+ulubione, wiadomości i preferencje każdego konta. Baza jest zapisana w wolumenie
+Dockera. Migracje schematu wykonują się automatycznie, bez kasowania danych.
 
-Logowanie i rejestracja są tymczasowo wyłączone. Katalog i przycisk
-**Pobierz wszystkie dane z API** są dostępne od razu po otwarciu strony.
-Przycisk pobiera pełne katalogi instytucji, kierunków i wariantów RAD-on,
-pokazując postęp. Pełne rekordy są zachowywane w SQLite, a ponowny import
-aktualizuje wpisy bez duplikatów. Każdy komputer ma własną bazę danych.
-Rejestr RAD-on nie potwierdza otwartej rekrutacji ani progów przyjęcia.
+Startowy katalog zawiera 140 prawdziwych kierunków. Administrator w zakładce
+**Administracja** może pobrać wszystkie strony katalogów instytucji i kierunków
+RAD-on. Pełne rekordy API są zachowane w SQLite; import nie tworzy duplikatów.
+Administrator może także dopisać sprawdzone wymagania przedmiotowe na konkretny
+rok, podając oficjalne źródło i alternatywne grupy przedmiotów.
 
-[Struktura tabel, źródło API i sposób importowania danych](BAZA_DANYCH.md).
+Ranking łączy zainteresowania, przygotowanie przedmiotowe, mocne strony oraz
+preferencje. Nie zgaduje progów ani kosztów studiów. Brak biologii nie oznacza
+z automatu braku możliwości przyjęcia na medycynę. Twarde wykluczenie dotyczy
+wyłącznie niespełnionych, zweryfikowanych wymagań: gdy znane są wyniki wszystkich
+alternatyw danej grupy albo kandydat oznaczył maturę jako kompletną.
+Opis algorytmu i ograniczeń: [BAZA_DANYCH.md](BAZA_DANYCH.md).
+
+Model otrzymuje aktualny kontekst z bazy: dane zalogowanego kandydata, ranking
+i wybrane pasujące oferty. Nie jest osobno trenowany na kontach. Nie dostaje haseł,
+innych kont ani dokładnych współrzędnych domu. Nie wykonuje SQL i nie zmienia ocen
+ani ankiety; może zapisać wyłącznie kontrolowane preferencje rankingu oraz wskazać
+widok aplikacji. Proste skróty nawigacyjne działają natychmiast bez wywołania LLM.
+Pierwsza odpowiedź po załadowaniu modelu może trwać dłużej; kolejne korzystają
+z modelu pozostającego w pamięci.
+
+Współrzędne miejscowości są dołączone lokalnie z [GeoNames](https://www.geonames.org/)
+([źródło](https://download.geonames.org/export/dump/), CC BY 4.0). Znaczniki pokazują
+miejscowości uczelni, nie budynki kampusów. Dystans jest przybliżony, w linii prostej.
+Podkład OpenStreetMap i biblioteki mapy pobierane przez przeglądarkę wymagają internetu.
+Bez niego nadal można wybrać miejscowość z lokalnej listy i korzystać z odległości,
+profilu, rankingu oraz wcześniej przygotowanego lokalnego modelu.
+
+## Sprawdzenie działania
+
+```powershell
+docker compose exec -T app python -m unittest discover -s tests -v
+```
+
+Testy korzystają z tymczasowych baz: obejmują konta, walidację, izolację danych,
+ponowne wypełnianie ankiety, ranking, wymagania, odległości, import i formularze.
+Nie zmieniają danych użytkowników. Testowanie samego modelu wymaga działającej Ollamy.
 
 ## Dokumentacja
 

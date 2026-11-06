@@ -311,8 +311,7 @@ def _zapisz_instytucje(baza, rekordy, data_pobrania, wersja):
 
 def importuj_wszystko(id_administratora: int | None = None, postep=None) -> dict:
     """Pobierz oba publiczne katalogi bez filtrow i zapisz je razem atomowo."""
-    if id_administratora is not None:
-        wymagaj_administratora(id_administratora)
+    wymagaj_administratora(id_administratora)
     data_pobrania = teraz()
     instytucje, wersja_instytucji = _pobierz_wszystkie_strony(ADRES_INSTYTUCJI, "institutionUuid", "instytucje", postep)
     kierunki, wersja_kierunkow = _pobierz_wszystkie_strony(ADRES_API, "courseUuid", "kierunki", postep)
@@ -321,10 +320,9 @@ def importuj_wszystko(id_administratora: int | None = None, postep=None) -> dict
     try:
         with polaczenie() as baza:
             baza.execute("BEGIN IMMEDIATE")
-            if id_administratora is not None:
-                konto = baza.execute("SELECT rola, aktywny FROM uzytkownicy WHERE id = ?", (id_administratora,)).fetchone()
-                if not konto or konto["rola"] != "administrator" or not konto["aktywny"]:
-                    raise PermissionError("Ta operacja wymaga konta administratora.")
+            konto = baza.execute("SELECT rola, aktywny FROM uzytkownicy WHERE id = ?", (id_administratora,)).fetchone()
+            if not konto or konto["rola"] != "administrator" or not konto["aktywny"]:
+                raise PermissionError("Ta operacja wymaga konta administratora.")
             liczby = _zapisz_rekordy(baza, kierunki, data_pobrania, wersja_kierunkow)
             _zapisz_instytucje(baza, instytucje, data_pobrania, wersja_instytucji)
             baza.execute(

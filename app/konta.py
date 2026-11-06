@@ -4,6 +4,8 @@ import hashlib
 import hmac
 import secrets
 import sqlite3
+import re
+import time
 
 from app.database import polaczenie
 
@@ -32,7 +34,7 @@ def istnieje_administrator() -> bool:
 
 def utworz_konto(email: str, haslo: str, *, pierwszy_administrator: bool = False) -> int:
     email = email.strip().lower()
-    if len(email) > 254 or email.count("@") != 1 or not all(email.split("@")) or any(x.isspace() for x in email):
+    if len(email) > 254 or not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@.]{2,}", email):
         raise ValueError("Podaj poprawny adres e-mail.")
     if not 12 <= len(haslo) <= 256:
         raise ValueError("Haslo musi miec od 12 do 256 znakow.")
@@ -60,15 +62,32 @@ def utworz_konto(email: str, haslo: str, *, pierwszy_administrator: bool = False
 
 
 def zaloguj(email: str, haslo: str) -> int | None:
-    if len(haslo) > 256:
+    email = email.strip().lower()
+    if not email or not haslo or len(email) > 254 or len(haslo) > 256:
         return None
+    klucz = hashlib.sha256(email.encode()).hexdigest()
     with polaczenie() as baza:
+        proby = baza.execute("SELECT liczba_prob, blokada_do FROM proby_logowania WHERE identyfikator = ?", (klucz,)).fetchone()
+        if proby and proby["blokada_do"] > time.time():
+            raise ValueError("Zbyt wiele nieudanych prób. Spróbuj ponownie za minutę.")
         konto = baza.execute(
             "SELECT id, skrot_hasla FROM uzytkownicy WHERE email = ? AND aktywny = 1",
-            (email.strip().lower(),),
+            (email,),
         ).fetchone()
     if konto and sprawdz_haslo(haslo, konto["skrot_hasla"]):
+        with polaczenie() as baza:
+            baza.execute("DELETE FROM proby_logowania WHERE identyfikator = ?", (klucz,))
         return konto["id"]
+    with polaczenie() as baza:
+        baza.execute("BEGIN IMMEDIATE")
+        proby = baza.execute("SELECT liczba_prob, blokada_do FROM proby_logowania WHERE identyfikator = ?", (klucz,)).fetchone()
+        liczba = (proby["liczba_prob"] if proby and proby["blokada_do"] == 0 else 0) + 1
+        blokada = int(time.time()) + 60 if liczba >= 5 else 0
+        baza.execute(
+            "INSERT INTO proby_logowania (identyfikator,liczba_prob,blokada_do) VALUES (?,?,?) "
+            "ON CONFLICT(identyfikator) DO UPDATE SET liczba_prob=excluded.liczba_prob, blokada_do=excluded.blokada_do",
+            (klucz, liczba, blokada),
+        )
     return None
 
 
@@ -84,3 +103,17 @@ def wymagaj_administratora(id_uzytkownika: int) -> None:
     konto = pobierz_konto(id_uzytkownika)
     if not konto or konto["rola"] != "administrator":
         raise PermissionError("Ta operacja wymaga konta administratora.")
+
+
+def zapewnij_konto_admina() -> None:
+    """Jednorazowe konto demonstracyjne wskazane przez wlasciciela projektu."""
+    with polaczenie() as baza:
+        istnieje = baza.execute("SELECT id FROM uzytkownicy WHERE email = 'admin'").fetchone()
+    if istnieje:
+        return
+    haslo = skrot_hasla("admin")
+    with polaczenie() as baza:
+        baza.execute("BEGIN IMMEDIATE")
+        baza.execute("INSERT OR IGNORE INTO uzytkownicy (email,skrot_hasla,rola) VALUES ('admin',?,'administrator')", (haslo,))
+        identyfikator = baza.execute("SELECT id FROM uzytkownicy WHERE email = 'admin'").fetchone()[0]
+        baza.execute("INSERT OR IGNORE INTO profile_kandydatow (id_uzytkownika,imie) VALUES (?, 'Administrator')", (identyfikator,))
