@@ -7,15 +7,15 @@ import streamlit as st
 from app import dane, widoki
 from app.database import initialize_database, polaczenie, sciezka_bazy
 from app.doradca import odpowiedz_doradcy
-from app.konta import pobierz_konto, zapewnij_konto_admina
+from app.konta import pobierz_konto
 from app.mapa import pokaz_mape
 from app.rekomendacje import filtruj, pobierz_oferty, policz_dopasowanie, top_kierunki
 from app.ustawienia import OBSZARY, STRONY
+from app.synchronizacja import stan_synchronizacji
 
 st.set_page_config(page_title="Kierunek. — Znajdź swoje studia",page_icon="🎓",layout="wide",initial_sidebar_state="auto")
 st.markdown("<style>"+Path(__file__).with_name("styl.css").read_text(encoding="utf-8")+"</style>",unsafe_allow_html=True)
 initialize_database()
-zapewnij_konto_admina()
 
 
 @st.cache_data(ttl=120,show_spinner=False)
@@ -90,15 +90,25 @@ teraz = datetime.now()
 with st.sidebar:
     widoki.brand()
     st.caption("TWOJA PRZESTRZEŃ")
-    strony = [*STRONY,*( ["Administracja"] if konto["rola"]=="administrator" else [])]
-    ikony = {"Przegląd":"◈","Katalog kierunków":"▦","Mapa uczelni":"⌖","Mój profil":"◉","Ankieta":"☷","Ulubione":"♡","Administracja":"⚙"}
+    strony = list(STRONY)
+    if st.session_state.get("nawigacja") not in strony:
+        st.session_state["nawigacja"] = "Przegląd"
+    ikony = {"Przegląd":"◈","Katalog kierunków":"▦","Mapa uczelni":"⌖","Mój profil":"◉","Ankieta":"☷","Ulubione":"♡"}
     strona = st.radio("Nawigacja",strony,format_func=lambda x:f"{ikony[x]}  {x}",key="nawigacja",label_visibility="collapsed")
     st.divider()
     rok = st.selectbox("Rok rekrutacji",[teraz.year,teraz.year+1],index=1 if teraz.month>=10 else 0,key="rok_rekrutacji")
     st.caption("Weryfikacja zapisanych wymagań dotyczy wybranego roku.")
     gotowe = sum([bool(profil.get("imie")),bool(wyniki),bool(ankieta),profil.get("szerokosc") is not None])
     st.progress(gotowe/4,text=f"Twój profil: {gotowe*25}%")
-    st.markdown(f'<div class="account-box"><strong>{escape(profil.get("imie") or "Twoje konto")}</strong><br>{escape(konto["email"])}<br>{"Administrator" if konto["rola"]=="administrator" else "Kandydat"}</div>',unsafe_allow_html=True)
+    st.markdown(f'<div class="account-box"><strong>{escape(profil.get("imie") or "Twoje konto")}</strong><br>{escape(konto["email"])}</div>',unsafe_allow_html=True)
+    stan = stan_synchronizacji()
+    ostatnia = stan.get("ostatni_import")
+    st.caption("Dane aktualizują się automatycznie po 24 godzinach.")
+    st.caption("Ostatni import: "+(ostatnia.strftime("%d.%m.%Y %H:%M UTC") if ostatnia else "trwa przygotowywanie pełnego katalogu"))
+    if stan.get("stan")=="pobieranie":
+        st.caption("Pobieranie nowych danych w tle…")
+    elif stan.get("stan")=="blad":
+        st.caption("Ponowimy aktualizację automatycznie. Dostępny jest poprzedni katalog.")
     st.button("Wyloguj się",on_click=wyloguj,width="stretch")
 
 with polaczenie() as baza:
@@ -129,7 +139,6 @@ with glowna:
         for oferta in sorted(zapisane,key=lambda x:-x["dopasowanie"]): widoki.karta_kierunku(oferta,konto,ulubione,prefix="zapisane")
         niedostepne = len(ulubione)-len(zapisane)
         if niedostepne: st.caption(f"{niedostepne} zapisanych wariantów jest poza aktualnym katalogiem lub preferencjami rozmowy. Wpisy pozostają zapisane na koncie.")
-    elif strona=="Administracja": widoki.administracja(konto,oferty,rok)
 with czat:
     ranking = top_kierunki(filtruj(ocenione,st.session_state.get("filtry_katalogu",{})))
     okno_doradcy(konto,ranking,ocenione,strona)

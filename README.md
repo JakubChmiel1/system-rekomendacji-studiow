@@ -24,9 +24,9 @@ docker compose up --build -d --wait
 
 Otwórz [localhost:8501](http://localhost:8501).
 
-Konto demonstracyjne administratora: login **admin**, hasło **admin**. Jest tworzone
-jednorazowo przy starcie; istniejące hasło nie jest resetowane. Rejestracja zwykłego
-kandydata wymaga poprawnego e-maila i hasła o długości 12–256 znaków.
+Załóż konto w zakładce **Utwórz konto**. Rejestracja wymaga poprawnego e-maila
+i hasła o długości 12–256 znaków. Panel administratora został usunięty;
+istniejące konta zachowują swoje dane i mogą nadal się logować.
 
 Po zalogowaniu:
 
@@ -142,11 +142,27 @@ SQLite `rekomendacje_studiow.db` przechowuje oddzielne profile, ankiety, oceny,
 ulubione, wiadomości i preferencje każdego konta. Baza jest zapisana w wolumenie
 Dockera. Migracje schematu wykonują się automatycznie, bez kasowania danych.
 
-Startowy katalog zawiera 140 prawdziwych kierunków. Administrator w zakładce
-**Administracja** może pobrać wszystkie strony katalogów instytucji i kierunków
-RAD-on. Pełne rekordy API są zachowane w SQLite; import nie tworzy duplikatów.
-Administrator może także dopisać sprawdzone wymagania przedmiotowe na konkretny
-rok, podając oficjalne źródło i alternatywne grupy przedmiotów.
+Startowy katalog zawiera 140 prawdziwych kierunków. Osobna usługa Dockera
+`aktualizacja-danych` sprawdza co minutę datę ostatniego udanego pełnego importu.
+Jeśli import jest starszy niż 24 godziny albo jeszcze go nie było, pobiera
+wszystkie strony katalogów instytucji i kierunków RAD-on w tle.
+
+Gdy zapisane dane są świeże, uruchomienie lub odświeżenie aplikacji nie powoduje
+ponownego pobierania. W razie awarii API pozostaje poprzedni katalog, a próba
+jest ponawiana po 15 minutach. Jednocześnie może działać tylko jeden importer.
+Pełne rekordy API są zachowane w SQLite; import aktualizuje wpisy bez duplikatów
+oraz nie zmienia kont, ankiet, ocen, wiadomości ani ulubionych.
+
+W menu bocznym widać datę ostatniego pełnego importu i informację o pobieraniu.
+Nowy katalog pojawia się przy kolejnej interakcji ze stroną. Synchronizacja działa,
+gdy usługi Dockera są uruchomione, także bez otwartej strony i zalogowanego konta.
+Po przerwie kontrola daty następuje przy starcie usługi.
+
+Logi aktualizacji:
+
+```powershell
+docker compose logs --tail 30 aktualizacja-danych
+```
 
 Ranking łączy zainteresowania, przygotowanie przedmiotowe, mocne strony oraz
 preferencje. Nie zgaduje progów ani kosztów studiów. Brak biologii nie oznacza

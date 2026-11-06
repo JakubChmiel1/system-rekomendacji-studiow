@@ -36,18 +36,19 @@ więc ponowne pobranie danych aktualizuje wpisy i zachowuje ich lokalne identyfi
 
 ## Dostęp do aplikacji
 
-Aplikacja wymaga zalogowania. Konto demonstracyjne administratora **admin / admin**
-powstaje przy pierwszym starcie. Hasło w istniejącym koncie nie jest resetowane.
-Rejestracja kandydatów wymaga poprawnego e-maila, zgodnych haseł i 12–256 znaków.
-Hasła są zapisane jako skróty scrypt z oddzielną losową solą. Pięć nieudanych
-prób logowania blokuje kolejne próby dla tego loginu na minutę.
+Aplikacja wymaga zalogowania na konto kandydata. Rejestracja działa od pierwszego
+uruchomienia, bez administratora: wymaga poprawnego e-maila, zgodnych haseł
+i 12–256 znaków. Hasła są zapisane jako skróty scrypt z oddzielną losową solą.
+Pięć nieudanych prób logowania blokuje kolejne próby dla tego loginu na minutę.
 
-Import danych oraz edycja potwierdzonych wymagań są dostępne tylko administratorowi.
+Panel administratora i ręczny import zostały usunięte ze strony. Aplikacja nie
+tworzy nowego domyślnego konta administratora. Dotychczasowe konta i zapisane dane
+pozostają zachowane; wszystkie konta korzystają z tego samego menu aplikacji.
+Historyczne role i pola administratora pozostają w schemacie dla zgodności danych.
+
 Kandydat ma dostęp do własnych wyników, ankiety, ulubionych i rozmowy. Zapytania
-wiążą dane z identyfikatorem aktualnego konta; model nie otrzymuje identyfikatorów
-innych kont, haseł, e-maila ani dokładnych współrzędnych domu.
-
-Każdy komputer ma oddzielną bazę, konta i model zapisane w swoich wolumenach.
+wiążą dane z identyfikatorem aktualnego konta; model nie otrzymuje haseł, e-maila
+ani dokładnych współrzędnych domu. Każdy komputer ma oddzielną bazę i konta.
 
 ## Profil, ankieta i preferencje
 
@@ -87,7 +88,9 @@ ogranicza dopasowanie do 40% i pokazuje uwagę. Nie oznacza to zerowych szans.
 Wyłącznie zweryfikowane wymagania przedmiotowe dla wybranego roku mogą dać 0%
 i wykluczenie. Warunki z tej samej grupy są alternatywami (OR), osobne grupy muszą
 być spełnione łącznie (AND). Brakujące wyniki przy niekompletnym profilu oznaczają
-„do sprawdzenia”. Zapisane warunki nie obejmują automatycznie całej procedury
+„do sprawdzenia”. Dotychczasowe zapisane warunki pozostają do odczytu; w aplikacji nie ma już
+formularza ich edycji. Nie są aktualizowane przez API RAD-on. Zapisane warunki
+nie obejmują automatycznie całej procedury
 rekrutacyjnej, np. konkursu punktów, portfolio czy egzaminu wstępnego.
 
 Wynik jest zaokrąglany do 0,1 punktu (w kartach prezentowany jako pełny procent).
@@ -142,7 +145,7 @@ z API, wraz z adresami zapytań i datą pobrania. To próbka studiów pierwszego
 stopnia i jednolitych magisterskich, nie pełna lista uczelni w Polsce.
 Jest wczytywana tylko raz, bez internetu i bez nadpisywania kolejnych aktualizacji.
 
-Przycisk **Pobierz wszystkie dane z API** w zakładce „Administracja” pobiera:
+Usługa Dockera `aktualizacja-danych` automatycznie pobiera:
 
 - pełny katalog instytucji: `https://radon.nauka.gov.pl/opendata/polon/institutions`;
 - pełny katalog kierunków i ich wariantów: `https://radon.nauka.gov.pl/opendata/polon/courses`.
@@ -150,6 +153,22 @@ Przycisk **Pobierz wszystkie dane z API** w zakładce „Administracja” pobier
 [Oficjalne przykłady API instytucji](https://radon.nauka.gov.pl/pomoc/knowledge-base/414/).
 Oba sprawdzone API są publiczne i nie wymagają klucza. Nie korzystamy z wyłączonego
 API kierunków ani z jego dawnych kopii w innych portalach.
+
+Usługa sprawdza datę ostatniego udanego pełnego importu co 60 sekund.
+Import jest uruchamiany **dopiero po przekroczeniu 24 godzin** albo gdy pełnego
+importu jeszcze nie było. Zestaw startowy i częściowe pobrania nie przesuwają
+tego terminu. Wykorzystywane są daty UTC zakończenia importu w historii i metadanych,
+a nie daty modyfikacji rekordów zwracane przez API.
+
+Pobieranie nie zależy od otwartej strony ani od konta. Obie usługi używają tego
+samego obrazu aplikacji i wolumenu SQLite. Aplikacja wyświetla poprzedni katalog
+w trakcie pobierania. Odświeżenie strony samo nie uruchamia importu.
+
+W `metadane_aplikacji` wpis `synchronizacja_stan` przechowuje status, termin ponownej
+próby i odnawianą blokadę importu. Blokada zapobiega równoległym pobraniom i wygasa
+po 15 minutach bez postępu, np. po awarii procesu. Po błędzie próba jest ponawiana
+po 15 minutach; data ostatniego sukcesu nie jest zmieniana. Usługa wznawia kontrolę
+po uruchomieniu Dockera. Importy automatyczne mają `NULL` w `id_administratora`.
 
 Pobieranie korzysta z tokenów kolejnych stron, bez limitu ich liczby. Import
 obejmuje wszystkie poziomy i statusy studiów. Pasek pokazuje postęp. Liczba
@@ -208,7 +227,7 @@ kod i publiczny zestaw startowy. `docker compose down` zachowuje dane,
 a `docker compose down -v` usuwa także bazę i model.
 
 Działają konta, profil z wynikami i kwalifikacjami, ponawiana ankieta, ulubione,
-filtry, mapa, ranking, lokalny doradca, import i edycja warunków administratora.
+filtry, mapa, ranking, lokalny doradca i automatyczny import w tle.
 Materiały edukacyjne, automatyczne pobieranie kompletnych zasad rekrutacji oraz
 opłaty i terminy uczelni nie są częścią obecnego katalogu.
 

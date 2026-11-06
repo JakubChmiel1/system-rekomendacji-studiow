@@ -310,8 +310,17 @@ def _zapisz_instytucje(baza, rekordy, data_pobrania, wersja):
 
 
 def importuj_wszystko(id_administratora: int | None = None, postep=None) -> dict:
-    """Pobierz oba publiczne katalogi bez filtrow i zapisz je razem atomowo."""
+    """Zachowany interfejs starszych narzedzi; aktualizacja aplikacji dziala w tle."""
     wymagaj_administratora(id_administratora)
+    return _importuj_katalog(postep, id_administratora)
+
+
+def synchronizuj_katalog(postep=None) -> dict:
+    """Import publicznych danych dla wewnetrznej uslugi synchronizacji Dockera."""
+    return _importuj_katalog(postep)
+
+
+def _importuj_katalog(postep=None, id_administratora=None) -> dict:
     data_pobrania = teraz()
     instytucje, wersja_instytucji = _pobierz_wszystkie_strony(ADRES_INSTYTUCJI, "institutionUuid", "instytucje", postep)
     kierunki, wersja_kierunkow = _pobierz_wszystkie_strony(ADRES_API, "courseUuid", "kierunki", postep)
@@ -320,9 +329,10 @@ def importuj_wszystko(id_administratora: int | None = None, postep=None) -> dict
     try:
         with polaczenie() as baza:
             baza.execute("BEGIN IMMEDIATE")
-            konto = baza.execute("SELECT rola, aktywny FROM uzytkownicy WHERE id = ?", (id_administratora,)).fetchone()
-            if not konto or konto["rola"] != "administrator" or not konto["aktywny"]:
-                raise PermissionError("Ta operacja wymaga konta administratora.")
+            if id_administratora is not None:
+                konto = baza.execute("SELECT rola, aktywny FROM uzytkownicy WHERE id = ?", (id_administratora,)).fetchone()
+                if not konto or konto["rola"] != "administrator" or not konto["aktywny"]:
+                    raise PermissionError("Ta operacja wymaga konta administratora.")
             liczby = _zapisz_rekordy(baza, kierunki, data_pobrania, wersja_kierunkow)
             _zapisz_instytucje(baza, instytucje, data_pobrania, wersja_instytucji)
             baza.execute(
@@ -337,7 +347,7 @@ def importuj_wszystko(id_administratora: int | None = None, postep=None) -> dict
             )
             baza.execute(
                 "INSERT INTO metadane_aplikacji (klucz, wartosc) VALUES ('ostatni_pelny_import', ?) "
-                "ON CONFLICT(klucz) DO UPDATE SET wartosc = excluded.wartosc", (data_pobrania,),
+                "ON CONFLICT(klucz) DO UPDATE SET wartosc = excluded.wartosc", (teraz(),),
             )
     except (sqlite3.IntegrityError, TypeError, OverflowError) as blad:
         raise ValueError("Dane API nie pasuja do schematu. Caly import wycofano; poprzednia baza pozostaje bez zmian.") from blad

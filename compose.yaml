@@ -3,6 +3,7 @@ name: rekomendacje-studiow
 services:
   app:
     build: .
+    image: rekomendacje-studiow-app
     ports:
       - "127.0.0.1:8501:8501"
     environment:
@@ -15,6 +16,20 @@ services:
         condition: service_healthy
       model-init:
         condition: service_completed_successfully
+
+  aktualizacja-danych:
+    build: .
+    image: rekomendacje-studiow-app
+    command: ["python", "-m", "app.synchronizacja"]
+    volumes:
+      - sqlite_data:/data
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: unless-stopped
+    stop_grace_period: 45s
+    healthcheck:
+      disable: true
 
   ollama:
     image: ollama/ollama:0.40.15@sha256:0e59999e0e8f9fd4e704bd788a89b7e4cad399367fb1365f8c102ac662288761

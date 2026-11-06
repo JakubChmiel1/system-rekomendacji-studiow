@@ -7,7 +7,8 @@ from unittest.mock import patch
 from streamlit.testing.v1 import AppTest
 
 from app import dane
-from app.database import polaczenie
+from app.database import polaczenie, initialize_database
+from app.konta import utworz_konto
 
 
 class TestInterfejsu(unittest.TestCase):
@@ -15,6 +16,8 @@ class TestInterfejsu(unittest.TestCase):
         self.folder=tempfile.TemporaryDirectory()
         self.env=patch.dict(os.environ,{"DATABASE_PATH":str(Path(self.folder.name)/"gui.db")})
         self.env.start()
+        initialize_database()
+        self.user=utworz_konto("uczen@example.test","Haslo-testowe-123!")
         self.app=AppTest.from_file(str(Path(__file__).resolve().parents[1]/"app/streamlit_app.py")).run(timeout=30)
         self.assertFalse(self.app.exception)
 
@@ -22,8 +25,8 @@ class TestInterfejsu(unittest.TestCase):
         self.env.stop(); self.folder.cleanup()
 
     def login(self):
-        self.app.text_input(key="email_logowania").set_value("admin")
-        self.app.text_input(key="haslo_logowania").set_value("admin")
+        self.app.text_input(key="email_logowania").set_value("uczen@example.test")
+        self.app.text_input(key="haslo_logowania").set_value("Haslo-testowe-123!")
         next(x for x in self.app.button if x.label.startswith("Zaloguj się")).click().run(timeout=30)
         self.assertFalse(self.app.exception)
         return self.app.session_state["id_uzytkownika"]
@@ -33,7 +36,7 @@ class TestInterfejsu(unittest.TestCase):
         next(x for x in self.app.button if x.label.startswith("Zaloguj się")).click().run(timeout=30)
         self.assertTrue(any("Uzupełnij" in x.value for x in self.app.error))
         self.login()
-        for strona in ["Katalog kierunków","Mój profil","Ankieta","Mapa uczelni","Ulubione","Administracja","Przegląd"]:
+        for strona in ["Katalog kierunków","Mój profil","Ankieta","Mapa uczelni","Ulubione","Przegląd"]:
             with self.subTest(strona=strona):
                 self.app.radio(key="nawigacja").set_value(strona).run(timeout=30)
                 self.assertFalse(self.app.exception)
@@ -78,19 +81,17 @@ class TestInterfejsu(unittest.TestCase):
         self.assertFalse(self.app.exception)
         self.assertTrue(any(x.label=="♥ Zapisano — usuń" for x in self.app.button))
 
-    def test_przycisk_importu_admina_i_obsluga_bledu(self):
-        user=self.login()
-        self.app.radio(key="nawigacja").set_value("Administracja").run(timeout=30)
-        def pobierz(identyfikator,postep):
-            self.assertEqual(identyfikator,user)
-            postep("instytucje",2,2); postep("kierunki",3,3); postep("zapis",1,1)
-            return {"instytucje":2,"kierunki":3,"warianty":4}
-        with patch("app.radon.importuj_wszystko",side_effect=pobierz) as importowanie:
-            next(x for x in self.app.button if x.label=="Pobierz wszystkie dane z API").click().run(timeout=30)
-            importowanie.assert_called_once()
+    def test_brak_panelu_recznego_importu_i_automatycznego_pobierania_przy_odswiezaniu(self):
+        self.login()
+        with polaczenie() as baza:
+            baza.execute("UPDATE uzytkownicy SET rola='administrator' WHERE id=?",(self.user,))
+        self.app=AppTest.from_file(str(Path(__file__).resolve().parents[1]/"app/streamlit_app.py"))
+        self.app.session_state["id_uzytkownika"]=self.user
+        self.app.session_state["nawigacja"]="Administracja"
+        with patch("app.synchronizacja.synchronizuj_katalog") as pobieranie:
+            self.app.run(timeout=30)
+            pobieranie.assert_not_called()
         self.assertFalse(self.app.exception)
-        self.assertTrue(any("2 instytucji" in x.value for x in self.app.success))
-        with patch("app.radon.importuj_wszystko",side_effect=ValueError("Błąd źródła. Baza bez zmian.")):
-            next(x for x in self.app.button if x.label=="Pobierz wszystkie dane z API").click().run(timeout=30)
-        self.assertFalse(self.app.exception)
-        self.assertTrue(any("Błąd źródła" in x.value for x in self.app.error))
+        self.assertNotIn("Administracja",self.app.radio(key="nawigacja").options)
+        self.assertFalse(any(x.label=="Pobierz wszystkie dane z API" for x in self.app.button))
+        self.assertTrue(any("automatycznie" in x.value for x in self.app.caption))

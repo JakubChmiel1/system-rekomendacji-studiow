@@ -46,8 +46,6 @@ def utworz_konto(email: str, haslo: str, *, pierwszy_administrator: bool = False
                 raise ValueError("Konto administratora juz istnieje. Zaloguj sie.")
             rola = "administrator"
         else:
-            if not baza.execute("SELECT 1 FROM uzytkownicy WHERE rola = 'administrator'").fetchone():
-                raise ValueError("Najpierw utworz konto administratora.")
             rola = "kandydat"
         try:
             identyfikator = baza.execute(

@@ -9,7 +9,7 @@ import streamlit as st
 
 from app import dane
 from app.database import polaczenie
-from app.konta import utworz_konto, zaloguj, wymagaj_administratora
+from app.konta import utworz_konto, zaloguj
 from app.rekomendacje import filtruj, top_kierunki
 from app.ustawienia import OBSZARY, POZIOMY, PRZEDMIOTY, PYTANIA, TRYBY
 
@@ -35,7 +35,7 @@ def ekran_logowania():
             logowanie,rejestracja = st.tabs(["Zaloguj się","Utwórz konto"])
             with logowanie:
                 with st.form("logowanie"):
-                    email = st.text_input("E-mail lub login administratora",placeholder="twoj@email.pl",key="email_logowania")
+                    email = st.text_input("E-mail lub login",placeholder="twoj@email.pl",key="email_logowania")
                     haslo = st.text_input("Hasło",type="password",placeholder="Wpisz hasło",key="haslo_logowania")
                     wyslane = st.form_submit_button("Zaloguj się  →",type="primary",width="stretch")
                 if wyslane:
@@ -50,7 +50,6 @@ def ekran_logowania():
                         st.rerun()
                     except ValueError as blad:
                         st.error(str(blad))
-                st.caption("Konto demonstracyjne administratora: **admin** / **admin**")
             with rejestracja:
                 with st.form("rejestracja"):
                     email = st.text_input("Adres e-mail",placeholder="twoj@email.pl",key="email_rejestracji")
@@ -265,57 +264,3 @@ def ankieta(konto,odpowiedzi):
             st.session_state["komunikat"]="Ankieta zapisana. Twój ranking został przeliczony."
             st.rerun()
         except ValueError as blad: st.error(str(blad))
-
-
-def administracja(konto,oferty,rok):
-    wymagaj_administratora(konto["id"])
-    st.subheader("Dane, na których opieramy wybory")
-    st.caption("Pełny import RAD-on aktualizuje instytucje, kierunki i warianty studiów. Konta, ankiety i zapisane wybory pozostają na miejscu.")
-    if st.button("Pobierz wszystkie dane z API",type="primary"):
-        from app.radon import importuj_wszystko
-        pasek = st.progress(0.0,text="Przygotowywanie…")
-        def postep(etap,pobrano,razem):
-            proporcja = min(pobrano/razem,1) if razem else 0
-            start,waga = {"instytucje":(0,.2),"kierunki":(.2,.7),"zapis":(.9,.1)}[etap]
-            pasek.progress(start+waga*proporcja,text=f"{etap.capitalize()}: {pobrano} / {razem or '?'}")
-        try:
-            wynik = importuj_wszystko(konto["id"],postep)
-            st.cache_data.clear()
-            st.session_state["komunikat"] = f"Import zakończony: {wynik['instytucje']} instytucji, {wynik['kierunki']} kierunków, {wynik['warianty']} wariantów."
-            st.rerun()
-        except (ValueError,PermissionError) as blad: st.error(str(blad))
-        finally: pasek.empty()
-    with polaczenie() as baza:
-        historia = [dict(x) for x in baza.execute("SELECT rodzaj,zakres,liczba_instytucji,liczba_kierunkow,liczba_wariantow,data_importu FROM historia_importow ORDER BY id DESC LIMIT 10")]
-    st.dataframe(historia,hide_index=True,width="stretch")
-    st.subheader("Zweryfikowane wymagania przedmiotowe")
-    st.caption("Dodawaj wyłącznie sprawdzone warunki z oficjalnego źródła uczelni. To warunki przedmiotowe, nie prognoza liczby punktów ani gwarancja przyjęcia.")
-    kierunki = {}
-    for x in oferty: kierunki.setdefault(x["id_kierunku"],f"{x['nazwa']} — {x['uczelnia']}")
-    with st.form("nowe_wymaganie"):
-        kierunek = st.selectbox("Kierunek",list(kierunki),format_func=lambda x:kierunki[x])
-        a,b = st.columns(2)
-        with a:
-            przedmiot = st.selectbox("Wymagany przedmiot",PRZEDMIOTY)
-            poziom = st.selectbox("Wymagany poziom",POZIOMY,index=1)
-            minimum = st.number_input("Minimalny wynik (%)",0.0,100.0,0.0)
-        with b:
-            rok_reguly = st.number_input("Rok rekrutacji dla reguły",2020,2100,rok)
-            grupa = st.number_input("Grupa alternatyw",1,30,1,help="W jednej grupie wystarczy jeden przedmiot. Każda osobna grupa musi być spełniona.")
-            adres = st.text_input("Oficjalny adres zasad rekrutacji (HTTPS)")
-        sprawdzone = st.checkbox("Sprawdziłem warunki i rok w oficjalnym źródle uczelni")
-        wyslane = st.form_submit_button("Zapisz zweryfikowany warunek")
-    if wyslane:
-        try:
-            dane.zapisz_wymaganie(konto["id"],kierunek,rok_reguly,grupa,przedmiot,poziom,minimum,adres,sprawdzone)
-            st.session_state["komunikat"]="Warunek zapisany. Ranking sprawdza go dla właściwego roku."
-            st.rerun()
-        except ValueError as blad: st.error(str(blad))
-    wymagania = dane.pobierz_wymagania(rok)
-    if wymagania:
-        st.dataframe([{**x,"kierunek":kierunki.get(x["id_kierunku"],str(x["id_kierunku"]))} for x in wymagania],hide_index=True,width="stretch")
-        usun = st.selectbox("Warunek do usunięcia",[x["id"] for x in wymagania],index=None)
-        if st.button("Usuń wybrany warunek",disabled=usun is None):
-            wymagaj_administratora(konto["id"])
-            with polaczenie() as baza: baza.execute("DELETE FROM wymagania_rekrutacyjne WHERE id=?",(usun,))
-            st.rerun()
