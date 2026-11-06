@@ -5,9 +5,51 @@ services:
     build: .
     ports:
       - "127.0.0.1:8501:8501"
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL: qwen3.5:4b
     volumes:
-      - ./app:/app/app:ro
       - sqlite_data:/data
+    depends_on:
+      ollama:
+        condition: service_healthy
+      model-init:
+        condition: service_completed_successfully
+
+  ollama:
+    image: ollama/ollama:0.40.15@sha256:0e59999e0e8f9fd4e704bd788a89b7e4cad399367fb1365f8c102ac662288761
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+      OLLAMA_NO_CLOUD: "1"
+      OLLAMA_CONTEXT_LENGTH: "2048"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+
+  model-init:
+    image: ollama/ollama:0.40.15@sha256:0e59999e0e8f9fd4e704bd788a89b7e4cad399367fb1365f8c102ac662288761
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_MODEL: qwen3.5:4b
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        if ollama show "$$OLLAMA_MODEL" >/dev/null 2>&1; then
+          echo "Model $$OLLAMA_MODEL jest juz zapisany."
+        else
+          echo "Pobieranie modelu $$OLLAMA_MODEL..."
+          ollama pull "$$OLLAMA_MODEL"
+        fi
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: "no"
 
 volumes:
   sqlite_data:
+  ollama_data:
