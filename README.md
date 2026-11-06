@@ -116,6 +116,22 @@ ponownego pobrania modelu.
 Docker przechowuje obrazy i wolumeny w swoim katalogu danych. Jeśli chcesz używać
 dysku D, ustaw lokalizację danych w Docker Desktop; projekt nie narzuca litery dysku.
 
+
+## Baza danych
+
+Baza SQLite ma nazwę `rekomendacje_studiow.db` i polskie nazwy tabel oraz kolumn.
+Przy pierwszym uruchomieniu kontenera automatycznie wczytuje 140 rzeczywistych
+kierunków z zestawu startowego RAD-on/POL-on. Dane pozostają w wolumenie Dockera.
+
+Logowanie i rejestracja są tymczasowo wyłączone. Katalog i przycisk
+**Pobierz wszystkie dane z API** są dostępne od razu po otwarciu strony.
+Przycisk pobiera pełne katalogi instytucji, kierunków i wariantów RAD-on,
+pokazując postęp. Pełne rekordy są zachowywane w SQLite, a ponowny import
+aktualizuje wpisy bez duplikatów. Każdy komputer ma własną bazę danych.
+Rejestr RAD-on nie potwierdza otwartej rekrutacji ani progów przyjęcia.
+
+[Struktura tabel, źródło API i sposób importowania danych](BAZA_DANYCH.md).
+
 ## Dokumentacja
 
 - [Ollama w Dockerze](https://docs.ollama.com/docker)
